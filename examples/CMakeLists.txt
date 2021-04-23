@@ -1,0 +1,2 @@
+add_subdirectory(testexample)
+add_subdirectory(wordcount)
