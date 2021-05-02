@@ -1,8 +1,8 @@
-class MapReduceSpecifications {
-public:
-    MapReduceSpecifications() { }
+#pragma once
 
-private:
-    int num_workers;
-};
-
+#include "job.hpp"
+#include "map.hpp"
+#include "reduce.hpp"
+#include "specification.hpp"
+#include "storage/in_memory.hpp"
+#include "datasource/directory_source.hpp"
