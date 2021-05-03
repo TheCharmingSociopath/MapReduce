@@ -46,7 +46,7 @@ int main (int argc, char* argv[])
     mpi::communicator world;
 
     if (world.rank() == 0)
-        std::cout << "MapReduce Example: Wordcount\n";
+        std::cout << "MapReduce Example: Grepper\n";
 
     const auto default_num_workers = std::thread::hardware_concurrency();
 
@@ -55,7 +55,7 @@ int main (int argc, char* argv[])
     po::options_description desc("Options");
     desc.add_options()
         ("help", "help information")
-        ("directory,d", po::value<std::string>(), "directory containing text files for word count")
+        ("directory,d", po::value<std::string>(), "directory containing text files for grep")
         ("num-map-workers,m", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for map task")
         ("num-reduce-workers,r", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for reduce task")
     ;

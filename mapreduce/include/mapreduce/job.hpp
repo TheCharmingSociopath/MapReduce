@@ -17,12 +17,12 @@
 template <class... Args>
 void log(boost::mpi::communicator& comm, Args&&... args)
 {   
-    // if (comm.rank() == 0)
-    //     std::cerr << "[master] ";
-    // else
-    //     std::cerr << "[slave-" << comm.rank() << "] ";
-    // ((std::cerr << args), ...);
-    // std::cerr << std::endl;
+    if (comm.rank() == 0)
+        std::cerr << "[master] ";
+    else
+        std::cerr << "[slave-" << comm.rank() << "] ";
+    ((std::cerr << args), ...);
+    std::cerr << std::endl;
 }
 
 namespace MapReduce
