@@ -1,2 +1,3 @@
 add_subdirectory(testexample)
 add_subdirectory(wordcount)
+add_subdirectory(grepper)

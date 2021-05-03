@@ -17,17 +17,17 @@
 template <class... Args>
 void log(boost::mpi::communicator& comm, Args&&... args)
 {   
-    if (comm.rank() == 0)
-        std::cerr << "[master] ";
-    else
-        std::cerr << "[slave-" << comm.rank() << "] ";
-    ((std::cerr << args), ...);
-    std::cerr << std::endl;
+    // if (comm.rank() == 0)
+    //     std::cerr << "[master] ";
+    // else
+    //     std::cerr << "[slave-" << comm.rank() << "] ";
+    // ((std::cerr << args), ...);
+    // std::cerr << std::endl;
 }
 
 namespace MapReduce
 {
-    template <typename Datasource, typename MapFunc, typename IntermediateStore, typename ReduceFunc>
+    template <typename Datasource, typename MapFunc, typename IntermediateStore, typename ReduceFunc, typename OutputStore>
     class Job
     {
     public:
@@ -35,13 +35,16 @@ namespace MapReduce
         using map_func_t = MapFunc;
         using intermediate_store_t = IntermediateStore;
         using reduce_func_t = ReduceFunc;
+        using output_store_t = OutputStore;
 
         using input_key_t = typename map_func_t::input_key_t;
         using input_value_t = typename map_func_t::input_value_t;
         using intermediate_key_t = typename intermediate_store_t::key_t;
         using intermediate_value_t = typename intermediate_store_t::value_t;
+        using output_key_t = typename output_store_t::key_t;
+        using output_value_t = typename output_store_t::value_t;
 
-        Job(datasource_t& ds, map_func_t& map_fn, intermediate_store_t& is, reduce_func_t& reduce_fn, intermediate_store_t& output_store)
+        Job(datasource_t& ds, map_func_t& map_fn, intermediate_store_t& is, reduce_func_t& reduce_fn, output_store_t& output_store)
             : input_ds(ds), map_fn(map_fn), istore(is), reduce_fn(reduce_fn), output_store(output_store)
         {
         }
@@ -334,7 +337,7 @@ namespace MapReduce
                     auto msg = comm.probe();
                     if (msg.tag() == GatherPayloadDelivery)
                     {
-                        std::pair<intermediate_key_t, std::list<intermediate_value_t>> data;
+                        std::pair<output_key_t, std::list<output_value_t>> data;
                         comm.recv(msg.source(), GatherPayloadDelivery, data);
                         auto& [key, values] = data;
                         output_store.emit(std::move(key), std::move(values));
@@ -372,7 +375,7 @@ namespace MapReduce
         map_func_t& map_fn;
         intermediate_store_t& istore; // accumulates intermediates from successive tasks
         reduce_func_t& reduce_fn;
-        intermediate_store_t& output_store;
+        output_store_t& output_store;
 
         enum {
             MapPhaseBegin,
