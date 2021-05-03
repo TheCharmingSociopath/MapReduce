@@ -31,8 +31,8 @@ public:
 
 class Reduce : public MapReduce::ReduceBase<std::string, std::list<int>> {
 public:
-    template <typename StartIterator, typename EndIterator, typename OutputStore>
-    void reduce(key_t key, StartIterator start, EndIterator end, OutputStore& store) {
+    template <typename Iterator, typename OutputStore>
+    void reduce(key_t key, Iterator start, Iterator end, OutputStore& store) {
         std::list<int> file_lines(start, end);
         store.emit(key, file_lines);
     }
