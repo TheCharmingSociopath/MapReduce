@@ -23,7 +23,7 @@ public:
         while(getline(ifs, line))
         {
             line_no++;
-            if(line == "hello from file2")
+            if(line.find("hello") != std::string::npos)
                 store.emit(key, line_no);
         }
     }
