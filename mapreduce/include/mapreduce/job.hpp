@@ -89,7 +89,7 @@ namespace MapReduce
 
             if (comm.rank() == 0)
             {
-                map_tasks_pending = 0;
+                int map_tasks_pending = 0;
                 for (auto p : workers)
                 {
                     log(comm, "sending MapPhaseBegin to ", p);
@@ -443,6 +443,5 @@ namespace MapReduce
         
         // indices are task id
         std::vector<TaskItem> map_tasks;
-        int map_tasks_pending;
     };
 }
