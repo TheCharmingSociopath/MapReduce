@@ -17,6 +17,7 @@
 #include <map>
 #include <queue>
 #include <vector>
+#include <thread>
 
 template <class... Args>
 void log(boost::mpi::communicator& comm, Args&&... args)
@@ -51,6 +52,10 @@ namespace MapReduce
 
         Job(datasource_t& ds, map_func_t& map_fn, intermediate_store_t& is, combiner_t& cfn, reduce_func_t& reduce_fn, output_store_t& output_store)
             : input_ds(ds), map_fn(map_fn), combiner(cfn), istore(is), reduce_fn(reduce_fn), output_store(output_store)
+        {
+        }
+
+        ~Job()
         {
         }
 
@@ -90,6 +95,8 @@ namespace MapReduce
             if (comm.rank() == 0)
             {
                 int map_tasks_pending = 0;
+                int failed_tasks = 0;
+
                 for (auto p : workers)
                 {
                     log(comm, "sending MapPhaseBegin to ", p);
@@ -103,12 +110,25 @@ namespace MapReduce
                     item.status.worker = rank;
                     item.status.completed = false;
                     item.status.start_time = steady_clock::now();
+                    item.status.last_ping_time = steady_clock::now();
 
                     map_tasks_pending++;
                     log(comm, "assigned task ", task_id, " to process ", rank);
                     comm.send(rank, MapTaskAssignment, std::make_pair(task_id, item.inputs));
                     
                     map_tasks.push_back(std::move(item));
+                };
+
+                auto reassign_map_task = [&](int rank, int task_id) {
+                    TaskItem& item = map_tasks[task_id];
+
+                    item.status.worker = rank;
+                    item.status.completed = false;
+                    item.status.start_time = steady_clock::now();
+                    item.status.last_ping_time = steady_clock::now();
+
+                    log(comm, "reassigned task ", task_id, " to process ", rank);
+                    comm.send(rank, MapTaskAssignment, std::make_pair(task_id, item.inputs));
                 };
 
                 // dump initial work
@@ -128,26 +148,80 @@ namespace MapReduce
 
                 while(map_tasks_pending)
                 {
-                    auto msg = comm.probe();
-                    if (msg.tag() == MapTaskCompletion)
+                    auto status = comm.iprobe();
+                    if (!status)
                     {
-                        std::size_t task_id;
-                        comm.recv(msg.source(), MapTaskCompletion, task_id);
-                        log(comm, "recvd MapTaskCompletion from ", msg.source(), " for task_id ", task_id);
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(50ms);
 
-                        map_tasks_pending--;
-                        map_tasks[task_id].status.completed = true;
-                        map_tasks[task_id].status.end_time = steady_clock::now();
-
-                        input_key_t key;
-                        if (input_ds.getNewKey(key))
+                        // check for failures
+                        for (const auto& task : map_tasks)
                         {
-                            input_value_t value;
-                            input_ds.getRecord(key, value);
+                            auto cur_time = steady_clock::now();
+                            auto last_ping_time = task.status.last_ping_time;
+                            if (cur_time - last_ping_time > spec.ping_failure_time)
+                            {
+                                log(comm, "worker ", task.status.worker, " has failed; saving tasks for re-execution");
+                                for (auto& t2 : map_tasks)
+                                {
+                                    // mark all tasks assigned to that worker as failed
+                                    if (t2.status.worker == task.status.worker)
+                                    {
+                                        t2.status.worker = -1;
+                                        failed_tasks++;
+                                    }
+                                }
 
-                            TaskItem item;
-                            item.inputs[key] = {value};
-                            assign_map_task(msg.source(), item);
+                                failed_workers.push_back(task.status.worker);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        auto msg = status.get();
+                        if (msg.tag() == MapPhasePing)
+                        {
+                            std::size_t task_id;
+                            comm.recv(msg.source(), MapPhasePing, task_id);
+                            map_tasks[task_id].status.last_ping_time = steady_clock::now();
+                            log(comm, "recvd MapPhasePing from ", msg.source(), " for task_id ", task_id);
+                        }
+                        else if (msg.tag() == MapTaskCompletion)
+                        {
+                            std::size_t task_id;
+                            comm.recv(msg.source(), MapTaskCompletion, task_id);
+                            log(comm, "recvd MapTaskCompletion from ", msg.source(), " for task_id ", task_id);
+
+                            map_tasks_pending--;
+                            map_tasks[task_id].status.completed = true;
+                            map_tasks[task_id].status.end_time = steady_clock::now();
+
+                            input_key_t key;
+                            if (input_ds.getNewKey(key))
+                            {
+                                input_value_t value;
+                                input_ds.getRecord(key, value);
+
+                                TaskItem item;
+                                item.inputs[key] = {value};
+                                assign_map_task(msg.source(), item);
+                            }
+                            else
+                            {
+                                // reassign failed tasks
+                                if (failed_tasks)
+                                {
+                                    for (int i = 0; i < map_tasks.size(); i++)
+                                    {
+                                        const auto& task = map_tasks[i];
+                                        if (task.status.worker == -1)
+                                        {
+                                            reassign_map_task(msg.source(), i);
+                                            failed_tasks--;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -160,6 +234,19 @@ namespace MapReduce
             }
             else if (boost::algorithm::any_of_equal(workers, comm.rank()))
             {
+                std::atomic<bool> stop_pinger;
+                stop_pinger.store(false);
+
+                std::atomic<std::size_t> current_task_id;
+
+                std::thread pinger([&]() {
+                    while(stop_pinger.load() == false)
+                    {
+                        comm.send(0, MapPhasePing, current_task_id.load());
+                        std::this_thread::sleep_for(spec.ping_frequency);
+                    }
+                });
+
                 comm.recv(0, MapPhaseBegin);
                 log(comm, "recvd MapPhaseBegin");
 
@@ -171,6 +258,7 @@ namespace MapReduce
                         std::pair<std::size_t, map_task_inputs_t> data;
                         comm.recv(0, MapTaskAssignment, data);
                         auto [task_id, inputs] = data;
+                        current_task_id = task_id;
 
                         log(comm, "recvd MapTaskAssigment with task id ", task_id);
                         for (const auto& [key, values] : inputs)
@@ -194,6 +282,9 @@ namespace MapReduce
                         assert(0);
                     }
                 }
+
+                stop_pinger.store(true);
+                pinger.join();
             }
         }
 
@@ -385,6 +476,11 @@ namespace MapReduce
                         log(comm, "recvd GatherPayloadDeliveryComplete from ", msg.source());
                         awaiting_completion--;
                     }
+                    else if (msg.tag() == MapPhasePing)
+                    {
+                        std::size_t task_id;
+                        comm.recv(msg.source(), MapPhasePing, task_id);
+                    }
                     else
                     {
                         assert(0);
@@ -418,6 +514,7 @@ namespace MapReduce
             MapPhaseBegin,
             MapTaskAssignment,
             MapTaskCompletion,
+            MapPhasePing,
             MapPhaseEnd,
 
             ShufflePhaseBegin,
@@ -438,10 +535,12 @@ namespace MapReduce
                 int worker;
                 bool completed;
                 std::chrono::time_point<std::chrono::steady_clock> start_time, end_time;
+                std::chrono::time_point<std::chrono::steady_clock> last_ping_time;
             } status;
         };
         
         // indices are task id
         std::vector<TaskItem> map_tasks;
+        std::vector<int> failed_workers;
     };
 }
