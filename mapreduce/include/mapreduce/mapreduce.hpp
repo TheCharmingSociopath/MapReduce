@@ -2,6 +2,7 @@
 
 #include "job.hpp"
 #include "map.hpp"
+#include "combiner.hpp"
 #include "reduce.hpp"
 #include "specification.hpp"
 #include "storage/in_memory.hpp"

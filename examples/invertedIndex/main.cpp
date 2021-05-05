@@ -156,10 +156,11 @@ int main(int argc, char* argv[])
     MapReduce::DirectorySource datasource(input_directory);
     Map mapfn;
     MapReduce::InMemoryStorage<std::string, std::string> intermediate_store;
+    MapReduce::DefaultCombiner<std::string, std::string> combiner;
     Reduce reducefn;
     MapReduce::InMemoryStorage<std::string, std::list<std::string>> output_store;
 
-    MapReduce::Job job(datasource, mapfn, intermediate_store, reducefn, output_store);
+    MapReduce::Job job(datasource, mapfn, intermediate_store, combiner, reducefn, output_store);
     job.run(spec, world);
 
     if (world.rank() == 0) {

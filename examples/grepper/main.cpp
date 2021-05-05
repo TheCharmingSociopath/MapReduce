@@ -105,10 +105,11 @@ int main (int argc, char* argv[])
     MapReduce::DirectorySource datasource(source_dir);
     Map mapfn;
     MapReduce::InMemoryStorage<std::string, int> intermediate_store;
+    MapReduce::DefaultCombiner<std::string, int> combiner;
     Reduce reducefn;
     MapReduce::InMemoryStorage<std::string, std::list<int>> output_store;
 
-    MapReduce::Job job(datasource, mapfn, intermediate_store, reducefn, output_store);
+    MapReduce::Job job(datasource, mapfn, intermediate_store, combiner, reducefn, output_store);
     job.run(spec, world);
 
 

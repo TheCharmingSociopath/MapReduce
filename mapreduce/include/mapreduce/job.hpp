@@ -8,6 +8,7 @@
 #include <boost/algorithm/cxx11/any_of.hpp>
 
 #include "specification.hpp"
+#include "combiner.hpp"
 
 #include <chrono>
 #include <utility>
@@ -30,12 +31,13 @@ void log(boost::mpi::communicator& comm, Args&&... args)
 
 namespace MapReduce
 {
-    template <typename Datasource, typename MapFunc, typename IntermediateStore, typename ReduceFunc, typename OutputStore>
+    template <typename Datasource, typename MapFunc, typename IntermediateStore, typename CombinerFunc, typename ReduceFunc, typename OutputStore>
     class Job
     {
     public:
         using datasource_t = Datasource;
         using map_func_t = MapFunc;
+        using combiner_t = CombinerFunc;
         using intermediate_store_t = IntermediateStore;
         using reduce_func_t = ReduceFunc;
         using output_store_t = OutputStore;
@@ -47,8 +49,8 @@ namespace MapReduce
         using output_key_t = typename output_store_t::key_t;
         using output_value_t = typename output_store_t::value_t;
 
-        Job(datasource_t& ds, map_func_t& map_fn, intermediate_store_t& is, reduce_func_t& reduce_fn, output_store_t& output_store)
-            : input_ds(ds), map_fn(map_fn), istore(is), reduce_fn(reduce_fn), output_store(output_store)
+        Job(datasource_t& ds, map_func_t& map_fn, intermediate_store_t& is, combiner_t& cfn, reduce_func_t& reduce_fn, output_store_t& output_store)
+            : input_ds(ds), map_fn(map_fn), combiner(cfn), istore(is), reduce_fn(reduce_fn), output_store(output_store)
         {
         }
 
@@ -62,6 +64,8 @@ namespace MapReduce
 
             comm.barrier();
             run_map_phase(spec, comm);
+            comm.barrier();
+            run_combine_phase(spec, comm);
             comm.barrier();
             run_shuffle_phase(spec, comm);
             comm.barrier();
@@ -193,6 +197,23 @@ namespace MapReduce
             }
         }
 
+        void run_combine_phase(const Specifications& spec, boost::mpi::communicator& comm)
+        {
+            if constexpr (!std::is_same<combiner_t, DefaultCombiner<intermediate_key_t, intermediate_value_t>>::value)
+            {
+                intermediate_store_t combiner_istore;
+                for (const auto& key : istore.get_keys())
+                {
+                    const auto& values = istore.get_key_values(key);
+                    combiner.combine(key, std::begin(values), std::end(values), combiner_istore);
+                    log(comm, "exec combiner on key \"", key, "\" with total of ", values.size(), " values.");
+                }
+
+                istore = std::move(combiner_istore);
+            }
+        }
+
+
         void run_shuffle_phase(const Specifications& spec, boost::mpi::communicator& comm)
         {
             // workers has the list of ranks of the map processes in `comm`
@@ -272,11 +293,11 @@ namespace MapReduce
                         if (p != comm.rank())
                         {
                             comm.isend(p, ShufflePayloadDelivery, std::make_pair(key, values));
-                            log(comm, "isent ShufflePayloadDelivery with key \"", key, "\" to ", p);
+                            log(comm, "isent ShufflePayloadDelivery with key \"", key, "\" containing ", values.size(), " values to ", p);
                         }
                         else
                         {
-                            log(comm, "(fake)sent ShufflePayloadDelivery with key \"", key, "\" to self");
+                            log(comm, "(fake)sent ShufflePayloadDelivery with key \"", key, "\" containing ", values.size(), " values to self");
                             new_istore.emit(key, values);
                         }
                     }
@@ -389,6 +410,7 @@ namespace MapReduce
         datasource_t& input_ds;
         map_func_t& map_fn;
         intermediate_store_t& istore; // accumulates intermediates from successive tasks
+        combiner_t& combiner;
         reduce_func_t& reduce_fn;
         output_store_t& output_store;
 

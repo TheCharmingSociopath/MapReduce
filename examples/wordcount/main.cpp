@@ -23,6 +23,14 @@ public:
     }
 };
 
+class Combiner : public MapReduce::CombinerBase<std::string, int> {
+public:
+    template <typename IntermediateStore>
+    void combine(key_t key, typename IntermediateStore::const_iterator_t start, typename IntermediateStore::const_iterator_t end, IntermediateStore& store) {
+        store.emit(key, std::reduce(start, end));
+    }
+};
+
 class Reduce : public MapReduce::ReduceBase<std::string, int> {
 public:
     template <typename IntermediateStore>
@@ -97,13 +105,14 @@ int main (int argc, char* argv[])
 
     MapReduce::DirectorySource datasource(source_dir);
     Map mapfn;
+    //Combiner combiner;
+    MapReduce::DefaultCombiner<std::string, int> combiner;
     MapReduce::InMemoryStorage<std::string, int> intermediate_store;
     Reduce reducefn;
     MapReduce::InMemoryStorage<std::string, int> output_store;
 
-    MapReduce::Job job(datasource, mapfn, intermediate_store, reducefn, output_store);
+    MapReduce::Job job(datasource, mapfn, intermediate_store, combiner, reducefn, output_store);
     job.run(spec, world);
-
 
     if (world.rank() == 0)
     {
