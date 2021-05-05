@@ -11,8 +11,11 @@
 
 #include <chrono>
 #include <utility>
+#include <algorithm>
 #include <list>
 #include <map>
+#include <queue>
+#include <vector>
 
 template <class... Args>
 void log(boost::mpi::communicator& comm, Args&&... args)
@@ -220,13 +223,25 @@ namespace MapReduce
                     }
                 }
 
-                // TODO need load balancing algorithm here (sorted greedy?)
-                int curprocess = 0;
-                std::map<intermediate_key_t, int> process_map;
+                std::vector<std::pair<std::size_t, intermediate_key_t>> key_counts;
                 for (const auto& [key, value] : global_counts)
+                    key_counts.push_back(std::make_pair(value, key));
+                
+                std::sort(key_counts.rbegin(), key_counts.rend());
+
+                std::priority_queue<std::pair<std::size_t, int>, 
+                                    std::vector<std::pair<std::size_t, int>>, 
+                                    std::greater<std::pair<std::size_t, int>>> load_balancer_pq;
+                for(int i=0; i<reduce_workers.size(); ++i)
+                    load_balancer_pq.push(std::make_pair(0, i));
+                
+                std::map<intermediate_key_t, int> process_map;
+                for(const auto& [count, key] : key_counts)
                 {
-                    // assign a reduce worker to each key
-                    process_map[key] = reduce_workers[curprocess++ % reduce_workers.size()];
+                    auto[min_makespan, min_reduce_worker_idx] = load_balancer_pq.top();
+                    load_balancer_pq.pop();
+                    process_map[key] = reduce_workers[min_reduce_worker_idx];
+                    load_balancer_pq.push(std::make_pair(min_makespan+count, min_reduce_worker_idx));
                 }
                 
                 for (auto p : map_workers)
