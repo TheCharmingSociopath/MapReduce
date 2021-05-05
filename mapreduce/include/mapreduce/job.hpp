@@ -23,6 +23,7 @@
 template <class... Args>
 void log(boost::mpi::communicator& comm, Args&&... args)
 {   
+    return;
     if (comm.rank() == 0)
         std::cerr << "[master] ";
     else
@@ -310,8 +311,7 @@ namespace MapReduce
                 istore = std::move(combiner_istore);
             }
         }
-
-
+    
         void run_shuffle_phase(const Specifications& spec, boost::mpi::communicator& comm)
         {
             // workers has the list of ranks of the map processes in `comm`
@@ -390,7 +390,7 @@ namespace MapReduce
                         const auto& values = istore.get_key_values(key);
                         if (p != comm.rank())
                         {
-                            comm.isend(p, ShufflePayloadDelivery, std::make_pair(key, values));
+                            comm.send(p, ShufflePayloadDelivery, std::make_pair(key, values));
                             log(comm, "isent ShufflePayloadDelivery with key \"", key, "\" containing ", values.size(), " values to ", p);
                         }
                         else
@@ -404,7 +404,7 @@ namespace MapReduce
                     {
                         //if (p != comm.rank())
                         {
-                            comm.isend(p, ShufflePayloadDeliveryComplete);
+                            comm.send(p, ShufflePayloadDeliveryComplete);
                             log(comm, "isent ShufflePayloadDeliveryComplete to ", p);
                         }
                     }
@@ -499,11 +499,11 @@ namespace MapReduce
                 for (const auto& key : output_store.get_keys())
                 {
                     const auto& values = output_store.get_key_values(key);
-                    comm.isend(0, GatherPayloadDelivery, std::make_pair(key, values));
+                    comm.send(0, GatherPayloadDelivery, std::make_pair(key, values));
                     log(comm, "isent GatherPayloadDelivery with key \"", key, "\" to master");
                 }
 
-                comm.isend(0, GatherPayloadDeliveryComplete);
+                comm.send(0, GatherPayloadDeliveryComplete);
                 log(comm, "isent GatherPayloadDeliveryComplete to master");
             }
         }
