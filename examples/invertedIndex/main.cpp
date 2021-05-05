@@ -110,43 +110,43 @@ int main(int argc, char* argv[])
         ("num-map-workers,m", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for map task")
         ("num-reduce-workers,r", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for reduce task")
     ;
+
     po::positional_options_description p;
-    p.add("input-directory", -1);
+    p.add("directory", -1);
 
     po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+    po::store(po::command_line_parser(argc, argv).
+              options(desc).positional(p).run(), vm);
     po::notify(vm);
 
-    // if (vm.count("help") || argc == 1) {
-    //     if (world.rank() == 0) {
-    //         std::cout << "Usage: " << argv[0] << " [options]\n";
-    //         std::cout << desc;
-    //     }
-    //     return 0;
-    // }
+    if (vm.count("help") || argc == 1)
+    {
+        if (world.rank() == 0)
+        {
+            std::cout << "Usage: " << argv[0] << " [options]\n";
+            std::cout << desc;
+        }
+        return 0;
+    }
 
-    // if (vm.count("directory") == 0) {
-    //     if (world.rank() == 0)
-    //         std::cerr << "no input directory provided\n";
-    //     return 1;
-    // }
+    if (vm.count("directory") == 0)
+    {
+        if (world.rank() == 0)
+            std::cerr << "no input directory provided\n";
+        return 1;
+    }
 
-    // const auto num_map_workers = vm["num-map-workers"].as<unsigned int>();
-    // const auto num_reduce_workers = vm["num-reduce-workers"].as<unsigned int>();
-    // const auto input_directory = vm["input-directory"].as<std::string>();
-    // std::cout << "BTB" << std::endl;
-    const auto num_map_workers = 4;
-    const auto num_reduce_workers = 4;
-    const auto input_directory = "/home/thecharmingsociopath/IIIT/MapReduce/examples/invertedIndex/exampleInput/";
+    auto input_directory = vm["directory"].as<std::string>();
+    const auto num_map_workers = vm["num-map-workers"].as<unsigned int>();
+    const auto num_reduce_workers = vm["num-reduce-workers"].as<unsigned int>();
 
-    if (world.rank() == 0) {
-
+    if (world.rank() == 0)
+    {
         std::cout << "Configuration:\n";
         std::cout << "input directory: " << input_directory << '\n';
         std::cout << "number of map workers: " << num_map_workers << '\n';
         std::cout << "number of reduce workers: " << num_reduce_workers << '\n';
     }
-
 
     MapReduce::Specifications spec;
     spec.num_map_workers = num_map_workers;
