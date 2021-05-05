@@ -18,16 +18,23 @@ public:
     template <typename IntermediateStore>
     void map(input_key_t key, input_value_t, IntermediateStore& store) {
         std::ifstream ifs(key);
-        for (const auto& word : boost::range::istream_range<output_key_t>(ifs))
-            store.emit(word, 1);
+        std::string line;
+        int line_no = 0;
+        while(getline(ifs, line))
+        {
+            line_no++;
+            if(line.find("hello") != std::string::npos)
+                store.emit(key, line_no);
+        }
     }
 };
 
-class Reduce : public MapReduce::ReduceBase<std::string, int> {
+class Reduce : public MapReduce::ReduceBase<std::string, std::list<int>> {
 public:
-    template <typename IntermediateStore>
-    void reduce(key_t key, typename IntermediateStore::const_iterator_t start, typename IntermediateStore::const_iterator_t end, IntermediateStore& store) {
-        store.emit(key, std::reduce(start, end));
+    template <typename Iterator, typename OutputStore>
+    void reduce(key_t key, Iterator start, Iterator end, OutputStore& store) {
+        std::list<int> file_lines(start, end);
+        store.emit(key, file_lines);
     }
 };
 
@@ -39,7 +46,7 @@ int main (int argc, char* argv[])
     mpi::communicator world;
 
     if (world.rank() == 0)
-        std::cout << "MapReduce Example: Wordcount\n";
+        std::cout << "MapReduce Example: Grepper\n";
 
     const auto default_num_workers = std::thread::hardware_concurrency();
 
@@ -48,7 +55,7 @@ int main (int argc, char* argv[])
     po::options_description desc("Options");
     desc.add_options()
         ("help", "help information")
-        ("directory,d", po::value<std::string>(), "directory containing text files for word count")
+        ("directory,d", po::value<std::string>(), "directory containing text files for grep")
         ("num-map-workers,m", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for map task")
         ("num-reduce-workers,r", po::value<unsigned int>()->default_value(default_num_workers), "number of workers for reduce task")
     ;
@@ -99,7 +106,7 @@ int main (int argc, char* argv[])
     Map mapfn;
     MapReduce::InMemoryStorage<std::string, int> intermediate_store;
     Reduce reducefn;
-    MapReduce::InMemoryStorage<std::string, int> output_store;
+    MapReduce::InMemoryStorage<std::string, std::list<int>> output_store;
 
     MapReduce::Job job(datasource, mapfn, intermediate_store, reducefn, output_store);
     job.run(spec, world);
@@ -112,7 +119,13 @@ int main (int argc, char* argv[])
         {
             const auto& values = output_store.get_key_values(key);
             assert(values.size() == 1);
-            std::cout << key << ' ' << values.front() << '\n';
+            std::cout << key << ' ';
+            for(auto value_lst : values) 
+            {
+                for(auto line_no : value_lst)
+                    std::cout << line_no << ' ';
+            }
+            std::cout << std::endl;
         }
     }
     return 0;

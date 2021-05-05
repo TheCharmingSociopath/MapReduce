@@ -1,0 +1,3 @@
+hello from file2
+random
+hello from file2

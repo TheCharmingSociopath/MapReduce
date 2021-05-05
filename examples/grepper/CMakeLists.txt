@@ -1,4 +1,4 @@
-set(target invertedIndex)
+set(target grepper)
 
 set(sources
     main.cpp

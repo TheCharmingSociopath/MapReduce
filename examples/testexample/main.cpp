@@ -1,5 +1,3 @@
-#include <mapreduce/mapreduce.hpp>
-
 #include <iostream>
 
 int main () {
