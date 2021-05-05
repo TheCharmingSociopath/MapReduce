@@ -3,6 +3,7 @@
 #include "datasource.hpp"
 
 #include <filesystem>
+#include <map>
 
 namespace MapReduce
 {

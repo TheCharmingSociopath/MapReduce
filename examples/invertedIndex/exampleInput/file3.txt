@@ -1,0 +1,2 @@
+hello from file3
+some text
