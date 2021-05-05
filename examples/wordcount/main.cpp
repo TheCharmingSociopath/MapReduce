@@ -105,8 +105,8 @@ int main (int argc, char* argv[])
 
     MapReduce::DirectorySource datasource(source_dir);
     Map mapfn;
-    //Combiner combiner;
-    MapReduce::DefaultCombiner<std::string, int> combiner;
+    Combiner combiner;
+    //MapReduce::DefaultCombiner<std::string, int> combiner;
     MapReduce::InMemoryStorage<std::string, int> intermediate_store;
     Reduce reducefn;
     MapReduce::InMemoryStorage<std::string, int> output_store;
