@@ -5,6 +5,7 @@
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/list.hpp>
 #include <boost/serialization/map.hpp>
+#include <boost/serialization/vector.hpp>
 #include <boost/algorithm/cxx11/any_of.hpp>
 
 #include "specification.hpp"
@@ -81,7 +82,7 @@ namespace MapReduce
         }
 
     private:
-        using map_task_inputs_t = std::map<input_key_t, std::list<input_value_t>>;
+        using map_task_inputs_t = std::map<input_key_t, std::vector<input_value_t>>;
 
         void run_map_phase(const Specifications& spec, boost::mpi::communicator& comm)
         {
@@ -152,15 +153,16 @@ namespace MapReduce
                     if (!status)
                     {
                         using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(50ms);
+                        std::this_thread::sleep_for(spec.ping_check_frequency);
 
                         // check for failures
                         for (const auto& task : map_tasks)
                         {
                             auto cur_time = steady_clock::now();
                             auto last_ping_time = task.status.last_ping_time;
-                            if (cur_time - last_ping_time > spec.ping_failure_time)
+                            if (cur_time - last_ping_time > spec.ping_failure_time && task.status.worker != -1 && task.status.completed == false)
                             {
+                                std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(cur_time - last_ping_time).count() << "ms delay" << '\n';
                                 log(comm, "worker ", task.status.worker, " has failed; saving tasks for re-execution");
                                 for (auto& t2 : map_tasks)
                                 {
@@ -238,12 +240,16 @@ namespace MapReduce
                 stop_pinger.store(false);
 
                 std::atomic<std::size_t> current_task_id;
+                current_task_id.store(-1);
 
                 std::thread pinger([&]() {
                     while(stop_pinger.load() == false)
                     {
-                        comm.send(0, MapPhasePing, current_task_id.load());
-                        std::this_thread::sleep_for(spec.ping_frequency);
+                        if (current_task_id.load() != -1)
+                        {
+                            comm.send(0, MapPhasePing, current_task_id.load());
+                            std::this_thread::sleep_for(spec.ping_frequency);
+                        }
                     }
                 });
 
@@ -258,7 +264,7 @@ namespace MapReduce
                         std::pair<std::size_t, map_task_inputs_t> data;
                         comm.recv(0, MapTaskAssignment, data);
                         auto [task_id, inputs] = data;
-                        current_task_id = task_id;
+                        current_task_id.store(task_id);
 
                         log(comm, "recvd MapTaskAssigment with task id ", task_id);
                         for (const auto& [key, values] : inputs)
@@ -268,6 +274,7 @@ namespace MapReduce
                                 map_fn.map(key, value, istore);
                         }
 
+                        current_task_id.store(-1);
                         log(comm, "sent MapTaskCompletion with task id ", task_id);
                         comm.send(0, MapTaskCompletion, task_id);
                     }
@@ -411,7 +418,7 @@ namespace MapReduce
                         auto msg = comm.probe();
                         if (msg.tag() == ShufflePayloadDelivery)
                         {
-                            std::pair<intermediate_key_t, std::list<intermediate_value_t>> data;
+                            std::pair<intermediate_key_t, std::vector<intermediate_value_t>> data;
                             comm.recv(msg.source(), ShufflePayloadDelivery, data);
                             auto& [key, values] = data;
                             new_istore.emit(std::move(key), std::move(values));
@@ -464,7 +471,7 @@ namespace MapReduce
                     auto msg = comm.probe();
                     if (msg.tag() == GatherPayloadDelivery)
                     {
-                        std::pair<output_key_t, std::list<output_value_t>> data;
+                        std::pair<output_key_t, std::vector<output_value_t>> data;
                         comm.recv(msg.source(), GatherPayloadDelivery, data);
                         auto& [key, values] = data;
                         output_store.emit(std::move(key), std::move(values));

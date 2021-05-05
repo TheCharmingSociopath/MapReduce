@@ -7,7 +7,8 @@ namespace MapReduce {
     struct Specifications {
         Specifications()
             : ping_frequency(50),
-              ping_failure_time(200)
+              ping_failure_time(2000),
+              ping_check_frequency(50)
         {    
         }
 
@@ -17,5 +18,6 @@ namespace MapReduce {
         bool gather_on_master;
         std::chrono::milliseconds ping_frequency;
         std::chrono::milliseconds ping_failure_time;
+        std::chrono::milliseconds ping_check_frequency;
     };
 }

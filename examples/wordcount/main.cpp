@@ -19,7 +19,11 @@ public:
     void map(input_key_t key, input_value_t, IntermediateStore& store) {
         std::ifstream ifs(key);
         for (const auto& word : boost::range::istream_range<output_key_t>(ifs))
+        {
+            if (word.size() > 100)
+                continue;
             store.emit(word, 1);
+        }
     }
 };
 

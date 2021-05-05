@@ -7,7 +7,7 @@
 #include "storage.hpp"
 
 #include <map>
-#include <list>
+#include <vector>
 
 namespace MapReduce
 {
@@ -17,8 +17,8 @@ namespace MapReduce
     public:
         using key_t = Key;
         using value_t = Value;
-        using iterator_t = typename std::list<value_t>::iterator;
-        using const_iterator_t = typename std::list<value_t>::const_iterator;
+        using iterator_t = typename std::vector<value_t>::iterator;
+        using const_iterator_t = typename std::vector<value_t>::const_iterator;
 
         void emit(const key_t& key, const value_t& value) override
         {
@@ -27,7 +27,7 @@ namespace MapReduce
             store[key].push_back(value);
         }
 
-        void emit(const key_t& key, const std::list<value_t>& values) override
+        void emit(const key_t& key, const std::vector<value_t>& values) override
         {
             if (!store.count(key))
                 store[key] = {};
@@ -57,6 +57,6 @@ namespace MapReduce
         }
 
     private:
-        std::map<key_t, std::list<value_t>> store;
+        std::map<key_t, std::vector<value_t>> store;
     };
 }
