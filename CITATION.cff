@@ -1,0 +1,33 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Distributed MapReduce
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Aditya
+    family-names: Morolia
+    email: aditya.morolia@gmail.com
+    affiliation: IIIT Hyderabad
+  - given-names: Yashas
+    family-names: Samaga
+    email: yashas_2010@yahoo.com
+    affiliation: IIIT Hyderabad
+  - given-names: Sanjana
+    family-names: Sunil
+    email: sanjana99sunil@gmail.com
+    affiliation: IIIT Hyderabad
+identifiers:
+  - type: url
+    value: 'https://github.com/TheCharmingSociopath/MapReduce'
+repository-code: 'https://github.com/TheCharmingSociopath/MapReduce'
+abstract: >-
+  C++ implementation of the MapReduce library to handle
+  MapReduce tasks on a distributed system. This library
+  handles worker failures and performs load balancing. 
+keywords:
+  - MapReduce
+license: MIT
